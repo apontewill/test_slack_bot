@@ -1,0 +1,103 @@
+name: Post PR Details to Slack
+on:
+  pull_request:
+    types:
+      - closed
+jobs:
+  post_to_slack:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: [self-hosted]
+    steps:
+      - name: Sanitize PR Description
+        id: sanitize_pr_description
+        env:
+          DESCRIPTION: ${{ github.event.pull_request.body }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          DESCRIPTION="$(echo "$DESCRIPTION" | sed '/^<!--/d' | sed -z 's/\n//g; s/"//g')"
+          TITLE="$(echo $TITLE | sed -z 's/\n//g; s/"//g')"
+          echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+      - uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          PR_DESCRIPTION: ${{ steps.sanitize_pr_description.outputs.description }}
+          PR_TITLE: ${{ steps.sanitize_pr_description.outputs.title }}
+        with:
+          channel-id: "C070VRSGG2V" # fan-platform-production-releases
+          payload: |
+            {
+              "mrkdwn": true,
+              "text": "DGAP Production Deployment",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Midfield Production Deployment",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": ":merge: Pull Request: ${{ github.event.pull_request._links.html.href }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "rich_text",
+                  "elements": [
+                    {
+                      "type": "rich_text_section",
+                      "elements": [
+                        {
+                          "type": "emoji",
+                          "name": "rocket"
+                        },
+                        {
+                          "type": "emoji",
+                          "name": "graphql"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Author:* ${{ github.event.pull_request.user.login }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Merged By:* ${{ github.event.pull_request.merged_by.login }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Merged At:* ${{ github.event.pull_request.merged_at }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*${{ env.PR_TITLE }}*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ${{ toJSON(env.PR_DESCRIPTION) }}
+                  }
+                }
+              ]
+            }
